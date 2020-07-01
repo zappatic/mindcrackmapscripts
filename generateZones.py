@@ -24,11 +24,16 @@ zones = {
     map_name_overworld: [
         {"title": "Mindcrack Build Zone", "zones": [{"n": -1500, "e": 1500, "s": 1500, "w": -1500, "color": "#ff7800", "tooltip": "Mindcrack Build Zone"}]},
     ],
-
+    map_name_nether: [
+    ],
+    map_name_end: [
+    ],
 }
 
 
-coords_regex = re.compile('.*world;([0-9]+);[0-9]+;([0-9]+)$')
+coords_overworld_regex = re.compile('.*world;(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
+coords_nether_regex = re.compile('.*world_nether;(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
+coords_end_regex = re.compile('.*world_the_end;(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
 current_location = os.path.dirname(os.path.realpath(__file__))
 uuid_cache = {}
 
@@ -80,7 +85,9 @@ def lookupMinecraftID(uuid):
 
 
 # LOAD ALL YAML FILES
-loaded_coords = []
+loaded_coords_overworld = []
+loaded_coords_nether = []
+loaded_coords_end = []
 for (root, dirs, filenames) in os.walk(args.yamldir):
     for f in filenames:
         if not f.endswith(".yml"):
@@ -97,21 +104,50 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
         south = 0
         west = 0
         owner = ""
+        world = "overworld"
         try:
             for line in ymlcontents:
                 if line.startswith("Lesser Boundary Corner"):
-                    m = re.match(coords_regex, line)
-                    if m == None:
-                        raise Exception("Couldn't parse Lesser Boundary Corner in " + f)
-                    west = m.group(1)
-                    north = m.group(2)
+                    m = re.match(coords_overworld_regex, line)
+                    if m != None:
+                        west = m.group(1)
+                        north = m.group(2)
+                        world = "overworld"
+                    else:
+                        m = re.match(coords_nether_regex, line)
+                        if m != None:
+                            west = m.group(1)
+                            north = m.group(2)
+                            world = "nether"
+                        else:
+                            m = re.match(coords_end_regex, line)
+                            if m != None:
+                                west = m.group(1)
+                                north = m.group(2)
+                                world = "end"
+                            else:
+                                raise Exception("Couldn't parse Lesser Boundary Corner in " + f)
 
                 if line.startswith("Greater Boundary Corner"):
-                    m = re.match(coords_regex, line)
-                    if m == None:
-                        raise Exception("Couldn't parse Greater Boundary Corner in " + f)
-                    east = m.group(1)
-                    south = m.group(2)
+                    m = re.match(coords_overworld_regex, line)
+                    if m != None:
+                        east = m.group(1)
+                        south = m.group(2)
+                        world = "overworld"
+                    else:
+                        m = re.match(coords_nether_regex, line)
+                        if m != None:
+                            east = m.group(1)
+                            south = m.group(2)
+                            world = "nether"
+                        else:
+                            m = re.match(coords_end_regex, line)
+                            if m != None:
+                                east = m.group(1)
+                                south = m.group(2)
+                                world = "end"
+                            else:
+                                raise Exception("Couldn't parse Greater Boundary Corner in " + f)
 
                 if lookup_uuids and line.startswith("Owner:"):
                     owner = line.replace("Owner: ", "").replace("-", "")
@@ -120,13 +156,23 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
         except Exception as e:
             print(e)
             continue
-        if len(owner) == 0:
-            loaded_coords.append({"n": north, "e": east, "s": south, "w": west, "color": patreon_zone_color})
-        else:
-            loaded_coords.append({"n": north, "e": east, "s": south, "w": west, "color": patreon_zone_color, "tooltip": patreon_tooltip_prefix + owner})
 
-if len(loaded_coords) > 0:
-    zones[map_name_overworld].append({"title": patreon_layer_title, "zones": loaded_coords})
+        entry = {"n": north, "e": east, "s": south, "w": west, "color": patreon_zone_color}
+        if len(owner) != 0:
+            entry["tooltip"] = patreon_tooltip_prefix + owner
+        if world == "overworld":
+            loaded_coords_overworld.append(entry)
+        elif world == "nether":
+            loaded_coords_nether.append(entry)
+        elif world == "end":
+            loaded_coords_end.append(entry)
+
+if len(loaded_coords_overworld) > 0:
+    zones[map_name_overworld].append({"title": patreon_layer_title, "zones": loaded_coords_overworld})
+if len(loaded_coords_nether) > 0:
+    zones[map_name_nether].append({"title": patreon_layer_title, "zones": loaded_coords_nether})
+if len(loaded_coords_end) > 0:
+    zones[map_name_end].append({"title": patreon_layer_title, "zones": loaded_coords_end})
 
 # GENERATE zones.json
 Path(os.path.join(args.outputdir, "zones.json")).write_text(json.dumps(zones))
