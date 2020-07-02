@@ -18,6 +18,7 @@ const loadPolygons = () => {
   // Clear previously added layers
   activeOverlays.forEach((ao) => {
     overviewer.map.removeLayer(ao);
+    overviewer.layerCtrl.removeLayer(ao);
   });
   activeOverlays = [];
 
