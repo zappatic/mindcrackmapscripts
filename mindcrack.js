@@ -22,12 +22,17 @@ const loadPolygons = () => {
   });
   activeOverlays = [];
 
+  // Clear the zoneJumper dropdown
+  overviewer.zoneJumper.clear();
+
   // Loop over the provided layer data
   for (const [mapName, layers] of Object.entries(layerData)) {
     // Ignore the data if the layer doesn't belong to the current world
     if (mapName !== overviewer.current_world) {
       continue;
     }
+
+    const jumpToEntries = [];
 
     // Loop all the layers assigned to the current map name
     layers.forEach((layer) => {
@@ -47,12 +52,26 @@ const loadPolygons = () => {
 
         // Assign a tooltip if it is present (sticky means the tooltip follows the mouse pointer)
         if (zone.hasOwnProperty("tooltip")) {
-          polygon.bindTooltip(zone.tooltip, { sticky: true });
+          polygon.bindTooltip("Claimed by " + zone.tooltip, { sticky: true });
+          if (zone.tooltip !== "Mindcrack Build Zone") {
+            jumpToEntries.push(zone);
+          }
         }
 
         // Add the polygon to the layer group
         polygon.addTo(layerGroup);
       });
+
+      // Sort the zones, calculate the midpoint and add to the jumpZone dropdown
+      jumpToEntries
+        .sort((a, b) => {
+          return a.tooltip.toLowerCase().localeCompare(b.tooltip.toLowerCase());
+        })
+        .map((zone) => {
+          const midX = Math.round(zone.n + Math.abs(zone.n - zone.s) / 2);
+          const midZ = Math.round(zone.w + Math.abs(zone.e - zone.w) / 2);
+          overviewer.zoneJumper.addZone(zone.tooltip, { x: midX, z: midZ });
+        });
 
       // Remember this layer group so we can remove it later
       activeOverlays.push(layerGroup);
@@ -71,12 +90,57 @@ overviewer.util.ready(function () {
       if (httpRequest.status === 200) {
         layerData = JSON.parse(httpRequest.responseText);
 
+        // Install the zone jumper dropdown
+        overviewer.zoneJumperClass = L.Control.extend({
+          initialize: function (options) {
+            L.Util.setOptions(this, options);
+            this.container = L.DomUtil.create("div", "zonejumper");
+            this.select = L.DomUtil.create("select");
+            this.select.onchange = this.onChange;
+            this.container.appendChild(this.select);
+            this.addZone("Jump to...", null);
+          },
+          addZone: function (title, coords) {
+            var option = L.DomUtil.create("option");
+            if (coords) {
+              option.value = JSON.stringify(coords);
+            } else {
+              option.value = "";
+            }
+            option.innerText = title;
+            this.select.appendChild(option);
+          },
+          clear: function () {
+            L.DomUtil.empty(this.select);
+            this.addZone("Jump to...", null);
+          },
+          onChange: function (ev) {
+            var z = ev.target.value;
+            if (z !== "") {
+              const zone = JSON.parse(z);
+              const tileSetInfo = overviewer.current_layer[overviewer.current_world].tileSetConfig;
+              const latLng = overviewer.util.fromWorldToLatLng(zone.z, polygonAltitude, zone.x, tileSetInfo);
+              overviewer.map.setView(latLng, 6);
+              ev.target.value = "";
+            }
+          },
+          onAdd: function () {
+            return this.container;
+          },
+        });
+        overviewer.zoneJumper = new overviewer.zoneJumperClass();
+        overviewer.zoneJumper.addTo(overviewer.map);
+
         // Call the loadPolygons function for the first time so our layer options load
         loadPolygons();
 
         // Make sure the loadPolygons function is executed whenever we change the map
         overviewer.map.on("baselayerchange", function (ev) {
           loadPolygons();
+
+          // Make sure that the jump dropdown is always at the bottom
+          overviewer.zoneJumper.remove();
+          overviewer.zoneJumper.addTo(overviewer.map);
         });
       }
     }

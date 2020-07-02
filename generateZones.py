@@ -16,7 +16,6 @@ map_name_nether = "Nether - nether"
 map_name_end = "The End - end"
 patreon_zone_color = "#ff7800"
 patreon_layer_title = "Patreon Claimed Zones"
-patreon_tooltip_prefix = "Patreon claimed zone: "  # will be followed by name if found
 lookup_uuids = True
 
 # Add predefined zones here:
@@ -157,9 +156,9 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
             print(e)
             continue
 
-        entry = {"n": north, "e": east, "s": south, "w": west, "color": patreon_zone_color}
+        entry = {"n": int(north), "e": int(east), "s": int(south), "w": int(west), "color": patreon_zone_color}
         if len(owner) != 0:
-            entry["tooltip"] = patreon_tooltip_prefix + owner
+            entry["tooltip"] = owner
         if world == "overworld":
             loaded_coords_overworld.append(entry)
         elif world == "nether":
