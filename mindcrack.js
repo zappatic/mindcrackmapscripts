@@ -52,9 +52,11 @@ const loadPolygons = () => {
 
         // Assign a tooltip if it is present (sticky means the tooltip follows the mouse pointer)
         if (zone.hasOwnProperty("tooltip")) {
-          polygon.bindTooltip("Claimed by " + zone.tooltip, { sticky: true });
           if (zone.tooltip !== "Mindcrack Build Zone") {
+            polygon.bindTooltip("Claimed by " + zone.tooltip, { sticky: true });
             jumpToEntries.push(zone);
+          } else {
+            polygon.bindTooltip(zone.tooltip, { sticky: true });
           }
         }
 

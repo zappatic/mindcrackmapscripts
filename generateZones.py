@@ -15,7 +15,7 @@ map_name_overworld = "Overworld - overworld"
 map_name_nether = "Nether - nether"
 map_name_end = "The End - end"
 patreon_zone_color = "#ff7800"
-patreon_layer_title = "Patreon Claimed Zones"
+patreon_layer_title = "Claimed Zones"
 lookup_uuids = True
 
 # Add predefined zones here:
