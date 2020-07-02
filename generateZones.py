@@ -70,17 +70,17 @@ def lookupMinecraftID(uuid):
         print("Failed parsing Minecraft API for: " + "https://api.mojang.com/user/profiles/" + uuid + "/names - root is empty list")
         return ""
 
-    first = data[0]
-    if not isinstance(first, dict):
-        print("Failed parsing Minecraft API for: " + "https://api.mojang.com/user/profiles/" + uuid + "/names - first object in root is not a dict")
+    last = data[-1]
+    if not isinstance(last, dict):
+        print("Failed parsing Minecraft API for: " + "https://api.mojang.com/user/profiles/" + uuid + "/names - last object in root is not a dict")
         return ""
 
-    if not "name" in first:
-        print("Failed parsing Minecraft API for: " + "https://api.mojang.com/user/profiles/" + uuid + "/names - first object in root doesn't have name field")
+    if not "name" in last:
+        print("Failed parsing Minecraft API for: " + "https://api.mojang.com/user/profiles/" + uuid + "/names - last object in root doesn't have name field")
         return ""
 
-    uuid_cache[uuid] = first["name"]
-    return first["name"]
+    uuid_cache[uuid] = last["name"]
+    return last["name"]
 
 
 # LOAD ALL YAML FILES
