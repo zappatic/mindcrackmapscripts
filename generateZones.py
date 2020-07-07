@@ -6,7 +6,9 @@ import os
 import re
 import json
 import argparse
+import anvil
 import shutil
+import math
 import urllib.request
 from pathlib import Path
 
@@ -31,18 +33,22 @@ zones = {
 
 # Add mappings between the world identifier in the GriefProtection YAML file and the Overviewer map name here:
 claim_dimensions = {
-    "world": map_name_overworld,
-    "world_nether": map_name_nether,
-    "world_the_end": map_name_end,
+    "world": {"mapname": map_name_overworld, "diskname": ""},
+    "world_nether": {"mapname": map_name_nether, "diskname": "DIM-1"},
+    "world_the_end": {"mapname": map_name_end, "diskname": "DIM1"},
 }
 
 coords_regex = re.compile('.*(world.*?);(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
 current_location = os.path.dirname(os.path.realpath(__file__))
 uuid_cache = {}
+terrain_height_lookup = {}
+terrain_heights = {}
+loaded_coords = {}
 
 # PARSE ARGUMENTS
 parser = argparse.ArgumentParser()
 parser.add_argument('yamldir', help='The directory containing all the yaml files')
+parser.add_argument('mcadir', help='The directory that contains the world save')
 parser.add_argument('outputdir', help='The directory in which to write zones.json')
 args = parser.parse_args()
 
@@ -87,8 +93,19 @@ def lookupMinecraftID(uuid):
     return last["name"]
 
 
+def markCoordsForLookup(x, z, world):
+    global terrain_height_lookup
+    region = "r." + str(math.floor(math.floor(x / 16) / 32)) + "." + str(math.floor(math.floor(z / 16) / 32)) + ".mca"
+    if world not in terrain_height_lookup:
+        terrain_height_lookup[world] = {}
+
+    if region not in terrain_height_lookup[world]:
+        terrain_height_lookup[world][region] = []
+
+    terrain_height_lookup[world][region].append([x, z])
+
+
 # LOAD ALL YAML FILES
-loaded_coords = {}
 for (root, dirs, filenames) in os.walk(args.yamldir):
     for f in filenames:
         if not f.endswith(".yml"):
@@ -112,8 +129,8 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
                     m = re.match(coords_regex, line)
                     if m != None:
                         world = m.group(1)
-                        west = m.group(2)
-                        north = m.group(3)
+                        west = int(m.group(2))
+                        north = int(m.group(3))
                     else:
                         raise Exception("Couldn't parse Lesser Boundary Corner in " + f)
 
@@ -121,8 +138,8 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
                     m = re.match(coords_regex, line)
                     if m != None:
                         world = m.group(1)
-                        east = m.group(2)
-                        south = m.group(3)
+                        east = int(m.group(2))
+                        south = int(m.group(3))
                     else:
                         raise Exception("Couldn't parse Greater Boundary Corner in " + f)
 
@@ -134,7 +151,13 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
             print(e)
             continue
 
-        entry = {"n": int(north), "e": int(east), "s": int(south), "w": int(west)}
+        entry = {"n": north, "e": east, "s": south, "w": west}
+
+        markCoordsForLookup(east, north, world)
+        markCoordsForLookup(east, south, world)
+        markCoordsForLookup(west, north, world)
+        markCoordsForLookup(west, south, world)
+
         if len(owner) != 0:
             entry["tooltip"] = owner
 
@@ -142,12 +165,55 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
             loaded_coords[world] = []
         loaded_coords[world].append(entry)
 
+# LOOKUP TERRAIN HEIGHTS OF ALL ZONE CORNERS
+for world in terrain_height_lookup:
+    if world not in claim_dimensions:
+        print("Terrain lookup world name '" + world + "' not found in the claim_dimensions")
+    else:
+        for region_name in terrain_height_lookup[world]:
+            if world not in terrain_heights:
+                terrain_heights[world] = {}
+            try:
+                region = anvil.Region.from_file(os.path.join(args.mcadir, claim_dimensions[world]["diskname"], "region", region_name))
+                for [x, z] in terrain_height_lookup[world][region_name]:
+                    chunk_x = math.floor(x / 16)
+                    chunk_z = math.floor(z / 16)
+                    chunk = region.get_chunk(chunk_x, chunk_z)
+                    for y in reversed(range(255)):
+                        block = chunk.get_block(x - (chunk_x * 16), y, z - (chunk_z * 16))
+                        if block.id != "air" and block.id != "bedrock":
+                            break
+                    terrain_heights[world][str(x) + "," + str(z)] = y
+
+            except:
+                print("Error loading terrain height from " + region_name)
+                pass
+
+# APPLY TERRAIN HEIGHTS TO ZONES
+for world in loaded_coords:
+    if world not in terrain_heights:
+        continue
+    for entry in loaded_coords[world]:
+        key = str(entry["e"]) + "," + str(entry["n"])
+        if key in terrain_heights[world]:
+            entry["elNE"] = terrain_heights[world][key]
+        key = str(entry["e"]) + "," + str(entry["s"])
+        if key in terrain_heights[world]:
+            entry["elSE"] = terrain_heights[world][key]
+        key = str(entry["w"]) + "," + str(entry["n"])
+        if key in terrain_heights[world]:
+            entry["elNW"] = terrain_heights[world][key]
+        key = str(entry["w"]) + "," + str(entry["s"])
+        if key in terrain_heights[world]:
+            entry["elSW"] = terrain_heights[world][key]
+
+# SAVE THE ZONES
 for world in loaded_coords:
     if world not in claim_dimensions:
         print("Yaml world name '" + world + "' not found in the claim_dimensions")
     else:
-        zones[claim_dimensions[world]].append({"title": patreon_layer_title, "color": patreon_zone_color, "zones": loaded_coords[world]})
-
+        dimension = claim_dimensions[world]
+        zones[dimension["mapname"]].append({"title": patreon_layer_title, "color": patreon_zone_color, "zones": loaded_coords[world]})
 
 # GENERATE zones.json
 Path(os.path.join(args.outputdir, "zones.json")).write_text(json.dumps(zones))
