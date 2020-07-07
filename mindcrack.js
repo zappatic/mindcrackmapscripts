@@ -8,6 +8,9 @@ let layerData = {};
 // The altitude at which the rectangles should be drawn
 const polygonAltitude = 64;
 
+// The zoom level to use when selecting a claimed zone in the zone jumper dropdown
+const zoneJumperZoomLevel = 11;
+
 // A cache of the currently active overlays, so we can clear them when changing maps
 let activeOverlays = [];
 
@@ -122,7 +125,7 @@ overviewer.util.ready(function () {
               const zone = JSON.parse(z);
               const tileSetInfo = overviewer.current_layer[overviewer.current_world].tileSetConfig;
               const latLng = overviewer.util.fromWorldToLatLng(zone.z, polygonAltitude, zone.x, tileSetInfo);
-              overviewer.map.setView(latLng, 6);
+              overviewer.map.setView(latLng, zoneJumperZoomLevel);
               ev.target.value = "";
             }
           },
