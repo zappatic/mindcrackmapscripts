@@ -1,6 +1,6 @@
 /*
  * The layerData object contains all the information about the layers that need to be added as well as the polygons within/
- * The structure is : { <map name> => [ { title, zones: [ {n,e,s,w, color, tooltip}, ... ] }, ... ] , ... }
+ * The structure is : { <map name> => [ { title, color, zones: [ {n,e,s,w, tooltip}, ... ] }, ... ] , ... }
  * It is dynamically loaded from zones.json
  */
 let layerData = {};
@@ -51,7 +51,7 @@ const loadPolygons = () => {
         const corner4 = overviewer.util.fromWorldToLatLng(zone.w, polygonAltitude, zone.n, tileSetInfo);
 
         // Create the polygon
-        const polygon = new L.polygon([corner1, corner2, corner3, corner4], { color: zone.color, weight: 1 });
+        const polygon = new L.polygon([corner1, corner2, corner3, corner4], { color: layer.color, weight: 1 });
 
         // Assign a tooltip if it is present (sticky means the tooltip follows the mouse pointer)
         if (zone.hasOwnProperty("tooltip")) {
@@ -73,8 +73,8 @@ const loadPolygons = () => {
           return a.tooltip.toLowerCase().localeCompare(b.tooltip.toLowerCase());
         })
         .map((zone) => {
-          const midX = Math.round(zone.n + Math.abs(zone.n - zone.s) / 2);
-          const midZ = Math.round(zone.w + Math.abs(zone.e - zone.w) / 2);
+          const midX = Math.round(zone.w + Math.abs(zone.e - zone.w) / 2);
+          const midZ = Math.round(zone.n + Math.abs(zone.n - zone.s) / 2);
           overviewer.zoneJumper.addZone(zone.tooltip, { x: midX, z: midZ });
         });
 
@@ -124,7 +124,7 @@ overviewer.util.ready(function () {
             if (z !== "") {
               const zone = JSON.parse(z);
               const tileSetInfo = overviewer.current_layer[overviewer.current_world].tileSetConfig;
-              const latLng = overviewer.util.fromWorldToLatLng(zone.z, polygonAltitude, zone.x, tileSetInfo);
+              const latLng = overviewer.util.fromWorldToLatLng(zone.x, polygonAltitude, zone.z, tileSetInfo);
               overviewer.map.setView(latLng, zoneJumperZoomLevel);
               ev.target.value = "";
             }

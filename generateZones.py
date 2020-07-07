@@ -21,7 +21,7 @@ lookup_uuids = True
 # Add predefined zones here:
 zones = {
     map_name_overworld: [
-        {"title": "Mindcrack Build Zone", "zones": [{"n": -1500, "e": 1500, "s": 1500, "w": -1500, "color": "#ff7800", "tooltip": "Mindcrack Build Zone"}]},
+        {"title": "Mindcrack Build Zone", "color": "#ff7800", "zones": [{"n": -1500, "e": 1500, "s": 1500, "w": -1500, "tooltip": "Mindcrack Build Zone"}]},
     ],
     map_name_nether: [
     ],
@@ -29,10 +29,14 @@ zones = {
     ],
 }
 
+# Add mappings between the world identifier in the GriefProtection YAML file and the Overviewer map name here:
+claim_dimensions = {
+    "world": map_name_overworld,
+    "world_nether": map_name_nether,
+    "world_the_end": map_name_end,
+}
 
-coords_overworld_regex = re.compile('.*world;(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
-coords_nether_regex = re.compile('.*world_nether;(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
-coords_end_regex = re.compile('.*world_the_end;(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
+coords_regex = re.compile('.*(world.*?);(-?[0-9]+);-?[0-9]+;(-?[0-9]+)$')
 current_location = os.path.dirname(os.path.realpath(__file__))
 uuid_cache = {}
 
@@ -84,9 +88,7 @@ def lookupMinecraftID(uuid):
 
 
 # LOAD ALL YAML FILES
-loaded_coords_overworld = []
-loaded_coords_nether = []
-loaded_coords_end = []
+loaded_coords = {}
 for (root, dirs, filenames) in os.walk(args.yamldir):
     for f in filenames:
         if not f.endswith(".yml"):
@@ -103,52 +105,28 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
         south = 0
         west = 0
         owner = ""
-        world = "overworld"
+        world = ""
         try:
             for line in ymlcontents:
                 if line.startswith("Lesser Boundary Corner"):
-                    m = re.match(coords_overworld_regex, line)
+                    m = re.match(coords_regex, line)
                     if m != None:
-                        west = m.group(1)
-                        north = m.group(2)
-                        world = "overworld"
+                        world = m.group(1)
+                        west = m.group(2)
+                        north = m.group(3)
                     else:
-                        m = re.match(coords_nether_regex, line)
-                        if m != None:
-                            west = m.group(1)
-                            north = m.group(2)
-                            world = "nether"
-                        else:
-                            m = re.match(coords_end_regex, line)
-                            if m != None:
-                                west = m.group(1)
-                                north = m.group(2)
-                                world = "end"
-                            else:
-                                raise Exception("Couldn't parse Lesser Boundary Corner in " + f)
+                        raise Exception("Couldn't parse Lesser Boundary Corner in " + f)
 
-                if line.startswith("Greater Boundary Corner"):
-                    m = re.match(coords_overworld_regex, line)
+                elif line.startswith("Greater Boundary Corner"):
+                    m = re.match(coords_regex, line)
                     if m != None:
-                        east = m.group(1)
-                        south = m.group(2)
-                        world = "overworld"
+                        world = m.group(1)
+                        east = m.group(2)
+                        south = m.group(3)
                     else:
-                        m = re.match(coords_nether_regex, line)
-                        if m != None:
-                            east = m.group(1)
-                            south = m.group(2)
-                            world = "nether"
-                        else:
-                            m = re.match(coords_end_regex, line)
-                            if m != None:
-                                east = m.group(1)
-                                south = m.group(2)
-                                world = "end"
-                            else:
-                                raise Exception("Couldn't parse Greater Boundary Corner in " + f)
+                        raise Exception("Couldn't parse Greater Boundary Corner in " + f)
 
-                if lookup_uuids and line.startswith("Owner:"):
+                elif lookup_uuids and line.startswith("Owner:"):
                     owner = line.replace("Owner: ", "").replace("-", "")
                     accountname = lookupMinecraftID(owner)
                     owner = accountname
@@ -156,22 +134,20 @@ for (root, dirs, filenames) in os.walk(args.yamldir):
             print(e)
             continue
 
-        entry = {"n": int(north), "e": int(east), "s": int(south), "w": int(west), "color": patreon_zone_color}
+        entry = {"n": int(north), "e": int(east), "s": int(south), "w": int(west)}
         if len(owner) != 0:
             entry["tooltip"] = owner
-        if world == "overworld":
-            loaded_coords_overworld.append(entry)
-        elif world == "nether":
-            loaded_coords_nether.append(entry)
-        elif world == "end":
-            loaded_coords_end.append(entry)
 
-if len(loaded_coords_overworld) > 0:
-    zones[map_name_overworld].append({"title": patreon_layer_title, "zones": loaded_coords_overworld})
-if len(loaded_coords_nether) > 0:
-    zones[map_name_nether].append({"title": patreon_layer_title, "zones": loaded_coords_nether})
-if len(loaded_coords_end) > 0:
-    zones[map_name_end].append({"title": patreon_layer_title, "zones": loaded_coords_end})
+        if world not in loaded_coords:
+            loaded_coords[world] = []
+        loaded_coords[world].append(entry)
+
+for world in loaded_coords:
+    if world not in claim_dimensions:
+        print("Yaml world name '" + world + "' not found in the claim_dimensions")
+    else:
+        zones[claim_dimensions[world]].append({"title": patreon_layer_title, "color": patreon_zone_color, "zones": loaded_coords[world]})
+
 
 # GENERATE zones.json
 Path(os.path.join(args.outputdir, "zones.json")).write_text(json.dumps(zones))
